@@ -22,11 +22,17 @@
     }
     .card h2 { color: #ff8c00; font-size: 1.05rem; margin-bottom: 12px; }
     .grid-loja { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+    .grid-novo { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+    .col-span-2 { grid-column: span 2; }
+    @media (max-width: 560px) {
+      .col-span-2 { grid-column: span 1; }
+    }
     label { display: block; font-size: 0.8rem; color: #a1a1aa; margin-bottom: 4px; }
-    input[type="text"], select {
+    input[type="text"], textarea, select {
       width: 100%; padding: 9px 10px; border-radius: 8px;
       border: 1px solid #2b2b38; background: #0c0c10; color: #fff;
     }
+    textarea { min-height: 68px; resize: vertical; }
     .btn {
       padding: 9px 14px; border: none; border-radius: 8px; font-weight: 700;
       cursor: pointer; font-size: 0.85rem;
@@ -40,6 +46,7 @@
     .item-row:last-child { border-bottom: none; }
     .item-info strong { font-size: 0.96rem; }
     .item-info span { display: block; font-size: 0.78rem; color: #a1a1aa; }
+    .item-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .item-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .preco-input { width: 95px !important; }
     .foto-input { max-width: 195px; font-size: 0.78rem; color: #a1a1aa; }
@@ -95,7 +102,54 @@
     </div>
 
     <div class="card">
-      <h2>Itens do Cardápio (Preço, Status e Foto da Galeria)</h2>
+      <h2>Adicionar Novo Produto</h2>
+      <form method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="acao" value="adicionar_item">
+        <div class="grid-novo">
+          <div>
+            <label>Nome do Produto</label>
+            <input type="text" name="nome" placeholder="Ex.: X-Frango Bacon" required>
+          </div>
+          <div>
+            <label>Categoria</label>
+            <select name="categoria">
+              <option value="Lanches" selected>Lanches</option>
+              <option value="Destaques">Destaques</option>
+              <option value="Bebidas">Bebidas</option>
+            </select>
+          </div>
+          <div>
+            <label>Número (opcional)</label>
+            <input type="text" name="numero" placeholder="Ex.: 19">
+          </div>
+          <div>
+            <label>Preço (R$)</label>
+            <input type="text" name="preco" placeholder="Ex.: 19.50 ou 19,50" required>
+          </div>
+          <div>
+            <label>Status Inicial</label>
+            <select name="ativo">
+              <option value="1" selected>Disponível</option>
+              <option value="0">Pausado</option>
+            </select>
+          </div>
+          <div>
+            <label>Foto (opcional)</label>
+            <input class="foto-input" type="file" name="foto" accept="image/*">
+          </div>
+          <div class="col-span-2">
+            <label>Descrição / Ingredientes</label>
+            <textarea name="descricao" placeholder="Ex.: Pão, frango desfiado, bacon, queijo, alface e tomate"></textarea>
+          </div>
+        </div>
+        <div style="margin-top: 12px;">
+          <button class="btn btn-gold" type="submit">Adicionar Produto</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Itens do Cardápio (Preço, Status, Foto e Exclusão)</h2>
       {% for item in cardapio %}
         <div class="item-row">
           <div class="item-info" style="display:flex; align-items:center; gap:10px;">
@@ -112,17 +166,24 @@
               <span>{{ item.categoria }} • Atual: R$ {{ "%.2f"|format(item.preco)|replace('.', ',') }} • {{ 'Ativo' if item.ativo else 'Pausado' }}</span>
             </div>
           </div>
-          <form class="item-form" method="POST" enctype="multipart/form-data">
-            <input type="hidden" name="acao" value="atualizar_item">
-            <input type="hidden" name="item_id" value="{{ item.id }}">
-            <input class="preco-input" type="text" name="preco" value="{{ '%.2f'|format(item.preco) }}" required>
-            <select name="ativo" style="width: 120px;">
-              <option value="1" {% if item.ativo %}selected{% endif %}>Disponível</option>
-              <option value="0" {% if not item.ativo %}selected{% endif %}>Pausado</option>
-            </select>
-            <input class="foto-input" type="file" name="foto" accept="image/*">
-            <button class="btn btn-gold" type="submit">Salvar</button>
-          </form>
+          <div class="item-actions">
+            <form class="item-form" method="POST" enctype="multipart/form-data">
+              <input type="hidden" name="acao" value="atualizar_item">
+              <input type="hidden" name="item_id" value="{{ item.id }}">
+              <input class="preco-input" type="text" name="preco" value="{{ '%.2f'|format(item.preco) }}" required>
+              <select name="ativo" style="width: 120px;">
+                <option value="1" {% if item.ativo %}selected{% endif %}>Disponível</option>
+                <option value="0" {% if not item.ativo %}selected{% endif %}>Pausado</option>
+              </select>
+              <input class="foto-input" type="file" name="foto" accept="image/*">
+              <button class="btn btn-gold" type="submit">Salvar</button>
+            </form>
+            <form method="POST" onsubmit="return confirm('Excluir {{ item.nome }} do cardápio?')">
+              <input type="hidden" name="acao" value="excluir_item">
+              <input type="hidden" name="item_id" value="{{ item.id }}">
+              <button class="btn btn-danger" type="submit">Excluir</button>
+            </form>
+          </div>
         </div>
       {% endfor %}
     </div>

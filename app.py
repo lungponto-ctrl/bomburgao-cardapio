@@ -341,13 +341,24 @@ def resolver_url_imagem(imagem):
         return ""
     if imagem.startswith("uploads/"):
         nome_arq = imagem.split("/", 1)[1]
-        # Se UPLOAD_FOLDER estiver dentro de static/, usa static/<UPLOAD_FOLDER_REL>/<nome_arq>
         pasta_rel = app.config["UPLOAD_FOLDER"].replace("\\", "/")
         if pasta_rel.startswith("static/"):
             subpasta = pasta_rel[len("static/"):].strip("/")
             return url_for("static", filename=f"{subpasta}/{nome_arq}")
         return url_for("static", filename=f"uploads/{nome_arq}")
     return url_for("static", filename=f"img/{imagem}")
+
+
+def remover_arquivo_upload(imagem):
+    if not imagem or not imagem.startswith("uploads/"):
+        return
+    nome_arq = os.path.basename(imagem)
+    caminho = os.path.join(app.config["UPLOAD_FOLDER"], nome_arq)
+    if os.path.isfile(caminho):
+        try:
+            os.remove(caminho)
+        except OSError:
+            pass
 
 
 def carregar_dados():
@@ -503,8 +514,61 @@ def admin_panel():
             salvar_dados(loja, cardapio)
             flash("Configurações da loja atualizadas!", "ok")
 
+        elif acao == "adicionar_item":
+            nome = request.form.get("nome", "").strip()
+            categoria = request.form.get("categoria", "Lanches").strip()
+            if categoria not in ("Destaques", "Lanches", "Bebidas"):
+                categoria = "Lanches"
+
+            numero = request.form.get("numero", "").strip()
+            descricao = request.form.get("descricao", "").strip()
+            preco_str = request.form.get("preco", "0").replace(",", ".").strip()
+            ativo_val = request.form.get("ativo") == "1"
+            arquivo_foto = request.files.get("foto")
+
+            if not nome:
+                flash("Informe o nome do produto para adicionar.", "erro")
+                return redirect(url_for("admin_panel"))
+
+            try:
+                preco_val = max(0.0, float(preco_str))
+            except ValueError:
+                preco_val = 0.0
+
+            novo_id = max((int(item.get("id", 0)) for item in cardapio), default=0) + 1
+            imagem_salva = "" if categoria == "Bebidas" else "burger-padrao.png"
+
+            if arquivo_foto and arquivo_foto.filename:
+                if arquivo_permitido(arquivo_foto.filename):
+                    ext = arquivo_foto.filename.rsplit(".", 1)[1].lower()
+                    nome_seguro = secure_filename(f"item_{novo_id}_{int(datetime.now().timestamp())}.{ext}")
+                    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+                    destino = os.path.join(app.config["UPLOAD_FOLDER"], nome_seguro)
+                    arquivo_foto.save(destino)
+                    imagem_salva = f"uploads/{nome_seguro}"
+                else:
+                    flash("Formato de imagem inválido. Use PNG, JPG, JPEG, WEBP ou GIF.", "erro")
+                    return redirect(url_for("admin_panel"))
+
+            novo_item = {
+                "id": novo_id,
+                "numero": numero,
+                "categoria": categoria,
+                "nome": nome,
+                "preco": preco_val,
+                "imagem": imagem_salva,
+                "ativo": ativo_val,
+                "descricao": descricao,
+            }
+            cardapio.append(novo_item)
+            salvar_dados(loja, cardapio)
+            flash(f'Produto "{nome}" adicionado ao cardápio!', "ok")
+
         elif acao == "atualizar_item":
-            item_id = int(request.form.get("item_id"))
+            try:
+                item_id = int(request.form.get("item_id", "0"))
+            except ValueError:
+                item_id = 0
             preco_str = request.form.get("preco", "0").replace(",", ".")
             ativo_val = request.form.get("ativo") == "1"
             arquivo_foto = request.files.get("foto")
@@ -525,6 +589,7 @@ def admin_panel():
                             os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
                             destino = os.path.join(app.config["UPLOAD_FOLDER"], nome_seguro)
                             arquivo_foto.save(destino)
+                            remover_arquivo_upload(item.get("imagem", ""))
                             item["imagem"] = f"uploads/{nome_seguro}"
                         else:
                             flash("Formato de imagem inválido. Use PNG, JPG, JPEG, WEBP ou GIF.", "erro")
@@ -534,6 +599,27 @@ def admin_panel():
 
             salvar_dados(loja, cardapio)
             flash("Item atualizado com sucesso!", "ok")
+
+        elif acao == "excluir_item":
+            try:
+                item_id = int(request.form.get("item_id", "0"))
+            except ValueError:
+                item_id = 0
+
+            item_removido = None
+            novo_cardapio = []
+            for item in cardapio:
+                if item.get("id") == item_id and item_removido is None:
+                    item_removido = item
+                else:
+                    novo_cardapio.append(item)
+
+            if item_removido is not None:
+                remover_arquivo_upload(item_removido.get("imagem", ""))
+                salvar_dados(loja, novo_cardapio)
+                flash(f'Item "{item_removido.get("nome", "Produto")}" excluído do cardápio.', "ok")
+            else:
+                flash("Item não encontrado para exclusão.", "erro")
 
         elif acao == "resetar_padrao":
             loja_reset = dict(DEFAULT_LOJA)
