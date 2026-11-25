@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import json
 import os
+import secrets
 from functools import wraps
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from flask import (
@@ -15,10 +16,15 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "bomburgao-chave-local-trocar-em-prod")
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 
 DATA_FILE = os.environ.get("DATA_FILE", "cardapio_data.json")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "bomburgao123")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+
+if not ADMIN_PASSWORD:
+    app.logger.warning(
+        "ADMIN_PASSWORD não está configurada no ambiente. Defina ADMIN_PASSWORD para acessar /admin."
+    )
 
 # Pasta onde ficam as fotos enviadas pelo admin
 UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.join("static", "uploads"))
@@ -478,7 +484,7 @@ def index():
 def admin_login():
     if request.method == "POST":
         senha = request.form.get("senha", "")
-        if senha == ADMIN_PASSWORD:
+        if ADMIN_PASSWORD and secrets.compare_digest(senha, ADMIN_PASSWORD):
             session["admin_logado"] = True
             return redirect(url_for("admin_panel"))
         flash("Senha incorreta.", "erro")
